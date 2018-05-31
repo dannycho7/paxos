@@ -49,6 +49,7 @@ class PaxosManager:
 			self.acks.append(msg['body'])
 		if len(self.acks) > (len(self.globalConfig) / 2): # majority acks
 			self.isLeader = True
+			self.electionInProg = False
 			val = self.__get_accept_val_from_acks()
 			self.broadcast(create_accept_msg(self.pid, self.ballotNum, val))
 	def process_prepare_msg(self, msg):
