@@ -15,5 +15,7 @@ def create_ack_msg(pid, ballotNum, acceptNum, acceptVal):
 	body['acceptNum'] = acceptNum
 	body['acceptVal'] = acceptVal
 	return create_msg('ack', pid, ballotNum, body)
+def create_decision_msg(pid, ballotNum, acceptVal):
+	return create_msg('decision', pid, ballotNum, acceptVal)
 def create_prepare_msg(pid, ballotNum):
 	return create_msg('prepare', pid, ballotNum)
