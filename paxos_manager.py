@@ -1,12 +1,13 @@
 import socket, threading
-from message_templates import create_accept_msg, create_prepare_msg, create_ack_msg
 from math import ceil
+from message_templates import create_accept_msg, create_prepare_msg, create_ack_msg
+from util import safe_print
 
 class PaxosManager:
 	def __init__(self, globalConfig, serverI):
 		self.globalConfig = globalConfig
 		self.acceptNum = { 'num': 0, 'depth': 0, 'pid': 0 }
-		self.acceptVal = None
+		self.acceptVal = []
 		self.ballotNum = { 'num': 0, 'depth': 0, 'pid': 0 }
 		self.depth = 0
 		self.electionInProg = False
@@ -14,7 +15,6 @@ class PaxosManager:
 		self.acks = [] # should contain items of: { 'acceptNum': <int>, 'acceptVal': <list> }
 		self.pid = globalConfig[serverI]['id']
 		self.p1lock = threading.Lock() # phase 1 lock
-
 	def broadcast(self, msg):
 		clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		for broadcastAddr in self.globalConfig:
@@ -29,7 +29,7 @@ class PaxosManager:
 		self.broadcast(create_prepare_msg(self.pid, self.ballotNum))
 		self.p1lock.release()
 	def process_recv_msg(self, msg):
-		print str(msg)
+		safe_print("Received message: {0}".format(str(msg)))
 		if msg['header']['type'] == 'accept':
 			self.process_accept_msg(msg)
 		elif msg['header']['type'] == 'prepare':
@@ -46,13 +46,13 @@ class PaxosManager:
 			return # if you already won the election or there is no election in progress, then ignore this ack msg
 		if msg['header']['ballotNum'] == self.ballotNum:
 			self.acks.append(msg['body'])
-		if len(self.acks) >= (len(self.globalConfig) / 2): # majority acks
+		if len(self.acks) > (len(self.globalConfig) / 2): # majority acks
 			self.isLeader = True
 			val = self.__get_accept_val_from_acks()
 			self.broadcast(create_accept_msg(self.pid, self.ballotNum, val))
 		self.p1lock.release()
-
 	def process_prepare_msg(self, msg):
+		self.p1lock.acquire()
 		pid = msg['header']['pid']
 		ballotNum = msg['header']['ballotNum']
 		if ballotNum['depth'] < self.depth:
@@ -60,7 +60,6 @@ class PaxosManager:
 		elif ballotNum['depth'] > self.depth:
 			# maybe do something since it seems like you'd be out-of-date
 			pass
-
 		if ballotNum['num'] > self.ballotNum['num'] or (ballotNum['num'] == self.ballotNum['num'] and ballotNum['pid'] >= self.ballotNum['pid']):
 			if ballotNum != self.ballotNum:
 				self.electionInProg = False # cancel election since you've ack'd a ballotNum higher than yourself
@@ -68,12 +67,14 @@ class PaxosManager:
 			ack_msg = create_ack_msg(self.pid, self.ballotNum, self.acceptNum, self.acceptVal)
 			clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			clientSocket.sendto(ack_msg, (self.globalConfig[pid]['ip_addr'], self.globalConfig[pid]['port']))
-
+		self.p1lock.release()
 	def __get_accept_val_from_acks(self):
+		# You don't have to check for depth, because it is checked on the process_prepare_msg. A node would NOT send an ACK if the depth is different from the prepared ballotNum. acceptVal/Num should be refreshed on every depth update.
 		maxAcceptVal = self.acceptVal
 		maxAcceptNum = self.acceptNum
 		for ack in self.acks:
 			if ack['acceptVal'] is not None:
-				pass
-				# if ack['acceptNum']['depth'] >= maxAcceptNum['depth'] and ack['acceptNum']['num'] > ack
+				if ack['acceptNum']['num'] > maxAcceptNum['num'] or (ack['acceptNum']['num'] == maxAcceptNum['num'] and ack['acceptNum']['pid'] > maxAcceptNum['pid']):
+					maxAcceptNum = ack['acceptNum']
+					maxAcceptVal = ack['acceptVal']
 		return maxAcceptVal

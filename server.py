@@ -18,7 +18,6 @@ def initPaxosThread():
 	while True:
 		sleep(random.uniform(2,7))
 		# if blockchain not empty
-		paxos_m.init_election()
 
 def listenRequests():
 	serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -29,7 +28,7 @@ def listenRequests():
 		data, addr = serverSocket.recvfrom(1024)
 		msg = json.loads(data)
 		# print "Received message from server {0}.".format(msg['header']['pid'])
-		paxos_m.process_recv_msg(msg)
+		threading.Thread(target=paxos_m.process_recv_msg, args=(msg,)).start()
 
 t = threading.Thread(target=listenRequests)
 t.daemon = True
@@ -49,5 +48,7 @@ while True:
 		pass
 	elif cmd == "printQueue":
 		pass
+	elif cmd == "startElection":
+		paxos_m.init_election()
 	else:
 		print "Invalid command"
