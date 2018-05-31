@@ -1,4 +1,4 @@
-import socket, threading
+import json, socket, threading
 from math import ceil
 from message_templates import create_accept_msg, create_ack_msg, create_decision_msg, create_prepare_msg
 from util import safe_print
@@ -9,6 +9,7 @@ class PaxosManager:
 		self.depth = 0
 		self.lock = threading.Lock() # reduces complexity by only processing one message at a time/preventing a collision from starting an election and processing a msg at the same time.
 		self.pid = globalConfig[serverI]['id']
+		self.serverI = serverI
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # share one socket on PaxosManager since every method is thread-safe
 		self.reset_activity()
 	def reset_activity(self):
@@ -21,7 +22,8 @@ class PaxosManager:
 		self.electionInProg = False
 		self.isLeader = False
 	def broadcast(self, msg):
-		for broadcastAddr in self.globalConfig:
+		# does not broadcast to self
+		for broadcastAddr in self.globalConfig[0:self.serverI] + self.globalConfig[self.serverI + 1:]:
 			self.sock.sendto(msg, (broadcastAddr['ip_addr'], broadcastAddr['port']))
 	def init_election(self):
 		self.lock.acquire()
@@ -29,7 +31,9 @@ class PaxosManager:
 		self.acceptVal = [] # change this to some kind of get items from queue function
 		self.ballotNum = { 'num': self.ballotNum['num'] + 1, 'pid': self.pid ,'depth': self.depth}
 		self.electionInProg = True
-		self.broadcast(create_prepare_msg(self.pid, self.ballotNum))
+		prepare_msg = create_prepare_msg(self.pid, self.ballotNum)
+		self.process_prepare_msg(json.loads(prepare_msg))
+		self.broadcast(prepare_msg)
 		self.lock.release()
 	def process_recv_msg(self, msg):
 		self.lock.acquire()
@@ -57,8 +61,10 @@ class PaxosManager:
 			self.acceptNum = ballotNum
 			self.acceptVal = msg['body']
 			self.acceptCount += 1
-			if self.acceptCount == (len(self.globalConfig) / 2) + 1: # receive accept from majority
-				self.broadcast(create_decision_msg(self.pid, self.ballotNum, self.acceptVal))
+			if self.acceptCount > (len(self.globalConfig) / 2): # receive accept from majority
+				decision_msg = create_decision_msg(self.pid, self.ballotNum, self.acceptVal)
+				self.process_decision_msg(json.loads(decision_msg))
+				self.broadcast(decision_msg)
 		elif ballotNum['num'] > self.ballotNum['num'] or (ballotNum['num'] == self.ballotNum['num'] and ballotNum['pid'] >= self.ballotNum['pid']):
 			self.acceptNum = ballotNum
 			self.acceptVal = msg['body']
@@ -73,7 +79,9 @@ class PaxosManager:
 			self.isLeader = True
 			self.electionInProg = False
 			val = self.__get_accept_val_from_acks()
-			self.broadcast(create_accept_msg(self.pid, self.ballotNum, val))
+			accept_msg = create_accept_msg(self.pid, self.ballotNum, val)
+			self.process_accept_msg(json.loads(accept_msg))
+			self.broadcast(accept_msg)
 	def process_decision_msg(self, msg):
 		ballotNum = msg['header']['ballotNum']
 		if self.depth != ballotNum['depth']:
@@ -81,8 +89,6 @@ class PaxosManager:
 		# add msg['body'] to blockchain
 		self.depth += 1
 		self.reset_activity()
-		print self.depth
-
 	def process_prepare_msg(self, msg):
 		ballotNum = msg['header']['ballotNum']
 		msg_pid = msg['header']['pid']
