@@ -16,26 +16,30 @@ val = serverI
 transactionManager = TransactionManager(localConfig['id'])
 paxos_m = PaxosManager(configJson, serverI, transactionManager)
 
-def initPaxosSaveThread():
-	# initiate leader election within (0, 10] seconds of receiving a moneyTransfer
+currentSaveThreadNum = 0
+saveThreadLock = threading.Lock() # used to prevent data race between currentSaveThread and adding a transaction that can create a saveThread
+
+def initPaxosSaveThread(threadNum):
+	# initiate leader election within (2, 10] seconds of receiving a moneyTransfer
 	while True:
-		sleep(random.uniform(2,10))
+		timeout = random.uniform(2,10)
+		safe_print('Starting save attempt in {0} seconds....'.format(timeout))
+		sleep(timeout)
+		saveThreadLock.acquire()
+		if len(transactionManager.getQueue()) == 0 or currentSaveThreadNum != threadNum:
+			saveThreadLock.release()
+			break
 		paxos_m.attempt_save() # won't save empty blocks
+		saveThreadLock.release()
 
 def listenRequests():
 	serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	serverSocket.bind((localConfig['ip_addr'], int(localConfig['port'])))
 	print "Server {0} listening on port {1}".format(str(localConfig['id']), str(localConfig['port']))
-
 	while True:
 		data, addr = serverSocket.recvfrom(1024)
 		msg = json.loads(data)
-		# print "Received message from server {0}.".format(msg['header']['pid'])
 		threading.Thread(target=paxos_m.process_recv_msg, args=(msg,)).start()
-
-t = threading.Thread(target=initPaxosSaveThread)
-t.daemon = True
-t.start()
 
 t = threading.Thread(target=listenRequests)
 t.daemon = True
@@ -46,7 +50,17 @@ while True:
 	if "moneyTransfer" in cmd:
 		moneyTransferStr, creditNodeStr, costStr = cmd.split(',')
 		transaction = { 'debitNode': localConfig['id'], 'creditNode': int(creditNodeStr), 'cost': int(costStr) }
-		transactionManager.addPendingTransaction(transaction)
+		if transaction['creditNode'] < 0 or transaction['creditNode'] >= len(configJson):
+			raise Exception('Invalid creditNode')
+		else:
+			saveThreadLock.acquire()
+			transactionManager.addPendingTransaction(transaction)
+			if len(transactionManager.getQueue()) == 1:
+				currentSaveThreadNum += 1
+				t = threading.Thread(target=initPaxosSaveThread, args=(currentSaveThreadNum,))
+				t.daemon = True
+				t.start()
+			saveThreadLock.release()
 	elif cmd == "printBlockchain":
 		blockchain = transactionManager.getBlockchain()
 		safe_print(list(map(lambda block: str(block), blockchain)))
