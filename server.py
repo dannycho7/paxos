@@ -16,11 +16,11 @@ val = serverI
 transactionManager = TransactionManager(localConfig['id'])
 paxos_m = PaxosManager(configJson, serverI, transactionManager)
 
-def initPaxosThread():
+def initPaxosSaveThread():
 	# initiate leader election within (0, 10] seconds of receiving a moneyTransfer
 	while True:
-		sleep(random.uniform(2,7))
-		# if blockchain not empty
+		sleep(random.uniform(2,10))
+		paxos_m.attempt_save() # won't save empty blocks
 
 def listenRequests():
 	serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -33,11 +33,11 @@ def listenRequests():
 		# print "Received message from server {0}.".format(msg['header']['pid'])
 		threading.Thread(target=paxos_m.process_recv_msg, args=(msg,)).start()
 
-t = threading.Thread(target=listenRequests)
+t = threading.Thread(target=initPaxosSaveThread)
 t.daemon = True
 t.start()
 
-t = threading.Thread(target=initPaxosThread)
+t = threading.Thread(target=listenRequests)
 t.daemon = True
 t.start()
 

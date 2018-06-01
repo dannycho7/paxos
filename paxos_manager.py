@@ -27,7 +27,8 @@ class PaxosManager:
 		self.acceptVal = None	
 	def attempt_save(self):
 		self.lock.acquire()
-		self.init_election()
+		if len(self.transactionManager.getQueue()) > 0:
+			self.init_election()
 		self.lock.release()
 	def broadcast(self, msg):
 		# does not broadcast to self
