@@ -1,7 +1,6 @@
 import json, socket, threading
 from math import ceil
 from message_templates import create_accept_msg, create_ack_msg, create_decision_msg, create_prepare_msg
-from transactions import Transaction
 from util import safe_print
 
 class PaxosManager:
@@ -54,7 +53,7 @@ class PaxosManager:
 		elif msg['header']['type'] == 'prepare':
 			self.process_prepare_msg(msg)
 		else:
-			raise Error('Incorrect msg format' + str(msg))
+			raise Exception('Incorrect msg format' + str(msg))
 		self.lock.release()
 	def process_accept_msg(self, msg):
 		ballotNum = msg['header']['ballotNum']
@@ -93,9 +92,7 @@ class PaxosManager:
 		ballotNum = msg['header']['ballotNum']
 		if self.depth != ballotNum['depth']:
 			return
-		safe_print(msg['body'])
-		block = map(lambda x: Transaction(x['debitNode'], x['creditNode'], x['cost']), msg['body'])
-		self.transactionManager.addBlock(block)
+		self.transactionManager.addBlock(msg['body'])
 		self.depth += 1
 		self.hard_reset_activity()
 	def process_prepare_msg(self, msg):

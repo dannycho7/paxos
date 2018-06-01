@@ -8,13 +8,13 @@ if len(sys.argv) < 3:
 	raise Exception('Wrong arguments. Correct Usage: python server.py <config_file_path> <server_index> <optional_dump_path>')
 else:
 	file = io.open(sys.argv[1])
-	config_json = json.load(file)
-	server_i = int(sys.argv[2]) % len(config_json)
-	local_config = config_json[server_i]
+	configJson = json.load(file)
+	serverI = int(sys.argv[2]) % len(configJson)
+	localConfig = configJson[serverI]
 
-val = server_i
-transactionManager = TransactionManager(local_config['id'])
-paxos_m = PaxosManager(config_json, server_i, transactionManager)
+val = serverI
+transactionManager = TransactionManager(localConfig['id'])
+paxos_m = PaxosManager(configJson, serverI, transactionManager)
 
 def initPaxosThread():
 	# initiate leader election within (0, 10] seconds of receiving a moneyTransfer
@@ -24,8 +24,8 @@ def initPaxosThread():
 
 def listenRequests():
 	serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	serverSocket.bind((local_config['ip_addr'], int(local_config['port'])))
-	print "Server {0} listening on port {1}".format(str(local_config['id']), str(local_config['port']))
+	serverSocket.bind((localConfig['ip_addr'], int(localConfig['port'])))
+	print "Server {0} listening on port {1}".format(str(localConfig['id']), str(localConfig['port']))
 
 	while True:
 		data, addr = serverSocket.recvfrom(1024)
@@ -44,9 +44,12 @@ t.start()
 while True:
 	cmd = raw_input("")
 	if "moneyTransfer" in cmd:
-		pass
+		moneyTransferStr, creditNodeStr, costStr = cmd.split(',')
+		transaction = { 'debitNode': localConfig['id'], 'creditNode': int(creditNodeStr), 'cost': int(costStr) }
+		transactionManager.addPendingTransaction(transaction)
 	elif cmd == "printBlockchain":
-		safe_print(transactionManager.getBlockchain())
+		blockchain = transactionManager.getBlockchain()
+		safe_print(list(map(lambda block: str(block), blockchain)))
 	elif cmd == "printBalance":
 		safe_print(transactionManager.getBalance())
 	elif cmd == "printQueue":
