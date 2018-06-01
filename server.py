@@ -1,6 +1,8 @@
 import io, json, random, socket, sys, threading
 from paxos_manager import PaxosManager
 from time import sleep
+from transactions import TransactionManager
+from util import safe_print
 
 if len(sys.argv) < 3:
 	raise Exception('Wrong arguments. Correct Usage: python server.py <config_file_path> <server_index> <optional_dump_path>')
@@ -11,7 +13,8 @@ else:
 	local_config = config_json[server_i]
 
 val = server_i
-paxos_m = PaxosManager(config_json, server_i)
+transactionManager = TransactionManager(local_config['id'])
+paxos_m = PaxosManager(config_json, server_i, transactionManager)
 
 def initPaxosThread():
 	# initiate leader election within (0, 10] seconds of receiving a moneyTransfer
@@ -43,12 +46,12 @@ while True:
 	if "moneyTransfer" in cmd:
 		pass
 	elif cmd == "printBlockchain":
-		pass
+		safe_print(transactionManager.getBlockchain())
 	elif cmd == "printBalance":
-		pass
+		safe_print(transactionManager.getBalance())
 	elif cmd == "printQueue":
-		pass
-	elif cmd == "startElection":
-		paxos_m.init_election()
+		safe_print(transactionManager.getQueue())
+	elif cmd == "attemptSave":
+		paxos_m.attempt_save()
 	else:
 		print "Invalid command"
