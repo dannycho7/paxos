@@ -23,11 +23,13 @@ class TransactionManager:
 	def addPendingTransaction(self, transaction):
 		self.lock.acquire()
 		if len(self.pendingTransactions) >= 10:
+			self.lock.release()
 			raise Exception('There are too many transactions.')
 		if self.pendingTransactionsCost + transaction['cost'] <= self.balance:
 			self.pendingTransactions.append(transaction)
 			self.pendingTransactionsCost += transaction['cost']
 		else:
+			self.lock.release()
 			raise Exception('You do not have enough money to pay this.')
 		self.lock.release()
 	def deleteTransaction(self, transaction):

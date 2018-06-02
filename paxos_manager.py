@@ -31,7 +31,11 @@ class PaxosManager:
 		self.acceptVal = None	
 	def add_transaction(self, transaction):
 		self.lock.acquire()
-		self.transactionManager.addPendingTransaction(transaction)
+		try:
+			self.transactionManager.addPendingTransaction(transaction)
+		except Exception as e:
+			self.lock.release()
+			raise Exception(e)
 		if len(self.transactionManager.getQueue()) == 1:
 			self.attempt_save_timeout_refresh()
 		self.lock.release()
@@ -138,6 +142,7 @@ class PaxosManager:
 		elif msg_type == 'prepare':
 			self.process_prepare_msg(msg)
 		else:
+			self.lock.release()
 			raise Exception('Incorrect msg format' + str(msg))
 		self.dumpDisk()
 		self.lock.release()
