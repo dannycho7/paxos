@@ -22,9 +22,10 @@ saveThreadLock = threading.Lock() # used to prevent data race between currentSav
 
 def initPaxosSaveThread(threadNum):
 	# initiate leader election within (2, 10] seconds of receiving a moneyTransfer
-	backoffMax = 10 # linearly increase this for increasing retry timeout
+	backoff = 10 # linearly increase this for increasing retry timeout
+	backoffMax = 60 # maximum backoff of 60 seconds
 	while True:
-		timeout = random.uniform(backoffMax/4, backoffMax)
+		timeout = random.uniform(backoff/4, backoff)
 		safe_print('Starting save attempt in {0} seconds....'.format(timeout))
 		sleep(timeout)
 		saveThreadLock.acquire()
@@ -32,7 +33,7 @@ def initPaxosSaveThread(threadNum):
 			saveThreadLock.release()
 			break
 		paxosManager.attempt_save() # won't save empty blocks
-		backoffMax *= 1.5
+		backoff = min(backoffMax, 1.5 * backoff)
 		saveThreadLock.release()
 
 def refreshPaxosSaveThread():
