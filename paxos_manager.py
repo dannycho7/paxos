@@ -76,7 +76,13 @@ class PaxosManager:
 	def process_recv_msg(self, msg):
 		self.lock.acquire()
 		safe_print("Received message: {0}".format(str(msg)))
-		if msg['header']['type'] == 'accept':
+		ballotNum = msg['header']['ballotNum']
+		if ballotNum['depth'] < self.depth:
+			pass
+		elif ballotNum['depth'] > self.depth:
+			# maybe do something since it seems like you'd be out-of-date
+			pass
+		elif msg['header']['type'] == 'accept':
 			self.process_accept_msg(msg)
 		elif msg['header']['type'] == 'ack':
 			self.process_ack_msg(msg)
@@ -91,11 +97,6 @@ class PaxosManager:
 	def process_accept_msg(self, msg):
 		ballotNum = msg['header']['ballotNum']
 		msg_pid = msg['header']['pid']
-		if ballotNum['depth'] < self.depth:
-			return
-		elif ballotNum['depth'] > self.depth:
-			# maybe do something since it seems like you'd be out-of-date
-			pass
 		if self.pid == ballotNum['pid'] and self.ballotNum == ballotNum: # check leadership by seeing if the proposed ballot was from this node
 			self.acceptNum = ballotNum
 			self.acceptVal = msg['body']
@@ -123,19 +124,12 @@ class PaxosManager:
 			self.broadcast(accept_msg)
 	def process_decision_msg(self, msg):
 		ballotNum = msg['header']['ballotNum']
-		if self.depth != ballotNum['depth']:
-			return
 		self.transactionManager.addBlock(msg['body'])
 		self.depth += 1
 		self.hard_reset_activity()
 	def process_prepare_msg(self, msg):
 		ballotNum = msg['header']['ballotNum']
 		msg_pid = msg['header']['pid']
-		if ballotNum['depth'] < self.depth:
-			return
-		elif ballotNum['depth'] > self.depth:
-			# maybe do something since it seems like you'd be out-of-date
-			return
 		if ballotNum['num'] > self.ballotNum['num'] or (ballotNum['num'] == self.ballotNum['num'] and ballotNum['pid'] >= self.ballotNum['pid']):
 			if ballotNum != self.ballotNum:
 				self.electionInProg = False # cancel election since you've ack'd a ballotNum higher than yourself
