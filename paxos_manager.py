@@ -36,7 +36,6 @@ class PaxosManager:
 			self.sock.sendto(msg, (broadcastAddr['ip_addr'], broadcastAddr['port']))
 	def init_election(self):
 		self.reset_activity()
-		self.acceptVal = [] # change this to some kind of get items from queue function
 		self.ballotNum = { 'num': self.ballotNum['num'] + 1, 'pid': self.pid ,'depth': self.depth}
 		self.electionInProg = True
 		prepare_msg = create_prepare_msg(self.pid, self.ballotNum)
