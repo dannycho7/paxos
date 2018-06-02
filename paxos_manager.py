@@ -1,6 +1,6 @@
 import json, threading
 from math import ceil
-from message_templates import create_accept_msg, create_ack_msg, create_decision_msg, create_prepare_msg
+from message_templates import create_accept_msg, create_ack_msg, create_block_update_req_msg, create_block_update_res_msg, create_decision_msg, create_prepare_msg
 from util import DelayedSocket, safe_print
 
 class PaxosManager:
@@ -76,12 +76,17 @@ class PaxosManager:
 	def process_recv_msg(self, msg):
 		self.lock.acquire()
 		safe_print("Received message: {0}".format(str(msg)))
-		ballotNum = msg['header']['ballotNum']
-		if ballotNum['depth'] < self.depth:
+		if msg['header']['type'] == 'blockUpdateReq':
+			self.process_create_block_update_req_msg(msg)
+		elif msg['header']['type'] == 'blockUpdateRes':
+			self.process_create_block_update_res_msg(msg)
+		elif msg['header']['ballotNum']['depth'] < self.depth:
 			pass
-		elif ballotNum['depth'] > self.depth:
-			# maybe do something since it seems like you'd be out-of-date
-			pass
+		elif msg['header']['ballotNum']['depth'] > self.depth:
+			# send blockchain request to the node you received a msg from since you'd be out-of-date
+			msg_pid = msg['header']['pid']
+			block_update_req_msg = create_block_update_req_msg(self.pid, self.ballotNum)
+			self.sock.sendto(block_update_req_msg, (self.globalConfig[msg_pid]['ip_addr'], self.globalConfig[msg_pid]['port']))
 		elif msg['header']['type'] == 'accept':
 			self.process_accept_msg(msg)
 		elif msg['header']['type'] == 'ack':
@@ -122,6 +127,15 @@ class PaxosManager:
 			accept_msg = create_accept_msg(self.pid, self.ballotNum, val)
 			self.process_accept_msg(json.loads(accept_msg))
 			self.broadcast(accept_msg)
+	def process_create_block_update_req_msg(self, msg):
+		msg_pid = msg['header']['pid']
+		block_update_res_msg = create_block_update_res_msg(self.pid, self.ballotNum, self.transactionManager.getBlockchain())
+		self.sock.sendto(block_update_res_msg, (self.globalConfig[msg_pid]['ip_addr'], self.globalConfig[msg_pid]['port']))
+	def process_create_block_update_res_msg(self, msg):
+		msg_blockchain = msg['body']
+		for i in range(self.depth, len(msg_blockchain)):
+			self.transactionManager.addBlock(msg_blockchain[i])
+		self.depth = len(self.transactionManager.getBlockchain())
 	def process_decision_msg(self, msg):
 		ballotNum = msg['header']['ballotNum']
 		self.transactionManager.addBlock(msg['body'])
