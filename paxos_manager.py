@@ -110,25 +110,31 @@ class PaxosManager:
 	def process_recv_msg(self, msg):
 		self.lock.acquire()
 		safe_print("Received message: {0}".format(str(msg)))
-		if msg['header']['type'] == 'blockUpdateReq':
-			self.process_create_block_update_req_msg(msg)
-		elif msg['header']['type'] == 'blockUpdateRes':
-			self.process_create_block_update_res_msg(msg)
-		elif msg['header']['ballotNum']['depth'] < self.depth:
-			pass
-		elif msg['header']['ballotNum']['depth'] > self.depth:
+		msg_pid = msg['header']['pid']
+		msg_type = msg['header']['type']
+		msg_ballotNum = msg['header']['ballotNum']
+		if msg_type == 'blockUpdateReq':
+			self.process_block_update_req_msg(msg)
+		elif msg_type == 'blockUpdateRes':
+			self.process_block_update_res_msg(msg)
+		elif msg_ballotNum['depth'] < self.depth:
+			# this means that an outdated node sent you a message
+			# forge a blockUpdateReq message from that node so that you can process it locally and send back a blockUpdateRes
+			sendToConfig = self.globalConfig[self.__get_server_index_from_pid(self.pid)] # send to yourself
+			block_update_req_msg = create_block_update_req_msg(msg_pid, msg_ballotNum) # forge message as if it was created by the node
+			self.sock.delayed_send(block_update_req_msg, (sendToConfig['ip_addr'], sendToConfig['port']), msg_pid)
+		elif msg_ballotNum['depth'] > self.depth:
 			# send blockchain request to the node you received a msg from since you'd be out-of-date
-			msg_pid = msg['header']['pid']
 			sendToConfig = self.globalConfig[self.__get_server_index_from_pid(msg_pid)]
 			block_update_req_msg = create_block_update_req_msg(self.pid, self.ballotNum)
 			self.sock.delayed_send(block_update_req_msg, (sendToConfig['ip_addr'], sendToConfig['port']), msg_pid)
-		elif msg['header']['type'] == 'accept':
+		elif msg_type == 'accept':
 			self.process_accept_msg(msg)
-		elif msg['header']['type'] == 'ack':
+		elif msg_type == 'ack':
 			self.process_ack_msg(msg)
-		elif msg['header']['type'] == 'decision':
+		elif msg_type == 'decision':
 			self.process_decision_msg(msg)
-		elif msg['header']['type'] == 'prepare':
+		elif msg_type == 'prepare':
 			self.process_prepare_msg(msg)
 		else:
 			raise Exception('Incorrect msg format' + str(msg))
@@ -143,9 +149,9 @@ class PaxosManager:
 			self.acceptVal = msg['body']
 			self.acceptCount += 1
 			if self.acceptCount > (len(self.globalConfig) / 2): # receive accept from majority
-				self.kill_current_save_timeout()
 				decision_msg = create_decision_msg(self.pid, self.ballotNum, self.acceptVal)
 				self.process_decision_msg(json.loads(decision_msg))
+				self.attempt_save_timeout_refresh()
 				self.broadcast(decision_msg)
 		elif ballotNum['num'] > self.ballotNum['num'] or (ballotNum['num'] == self.ballotNum['num'] and ballotNum['pid'] >= self.ballotNum['pid']):
 			self.acceptNum = ballotNum
@@ -164,12 +170,12 @@ class PaxosManager:
 			accept_msg = create_accept_msg(self.pid, self.ballotNum, val)
 			self.process_accept_msg(json.loads(accept_msg))
 			self.broadcast(accept_msg)
-	def process_create_block_update_req_msg(self, msg):
+	def process_block_update_req_msg(self, msg):
 		msg_pid = msg['header']['pid']
 		sendToConfig = self.globalConfig[self.__get_server_index_from_pid(msg_pid)]
 		block_update_res_msg = create_block_update_res_msg(self.pid, self.ballotNum, self.transactionManager.getBlockchain())
 		self.sock.delayed_send(block_update_res_msg, (sendToConfig['ip_addr'], sendToConfig['port']), msg_pid)
-	def process_create_block_update_res_msg(self, msg):
+	def process_block_update_res_msg(self, msg):
 		msg_blockchain = msg['body']
 		for i in range(self.depth, len(msg_blockchain)):
 			self.transactionManager.addBlock(msg_blockchain[i])
