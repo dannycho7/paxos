@@ -4,13 +4,13 @@ from message_templates import create_accept_msg, create_ack_msg, create_block_up
 from util import DelayedSocket, safe_print
 
 class PaxosManager:
-	def __init__(self, globalConfig, serverI, transactionManager):
+	def __init__(self, globalConfig, serverI, transactionManager, connectGraph):
 		self.globalConfig = globalConfig
 		self.depth = len(transactionManager.getBlockchain())
 		self.lock = threading.Lock() # reduces complexity by only processing one message at a time/preventing a collision from starting an election and processing a msg at the same time.
 		self.pid = globalConfig[serverI]['id']
 		self.serverI = serverI
-		self.sock = DelayedSocket() # share one socket on PaxosManager since every method is thread-safe
+		self.sock = DelayedSocket(connectGraph) # share one socket on PaxosManager since every method is thread-safe
 		self.transactionManager = transactionManager
 		self.hard_reset_activity()	
 	def reset_activity(self):
@@ -58,6 +58,7 @@ class PaxosManager:
 		self.isLeader = props['isLeader']
 		self.acceptNum = props['acceptNum']
 		self.acceptVal = props['acceptVal']
+		self.sock.initializeFromJSON(props['sock'])
 	def json(self):
 		props = {}
 		props['globalConfig'] = self.globalConfig
@@ -72,6 +73,7 @@ class PaxosManager:
 		props['isLeader'] = self.isLeader
 		props['acceptNum'] = self.acceptNum
 		props['acceptVal'] = self.acceptVal
+		props['sock'] = self.sock.json()
 		return props
 	def process_recv_msg(self, msg):
 		self.lock.acquire()

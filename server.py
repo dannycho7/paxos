@@ -2,7 +2,7 @@ import io, json, random, socket, sys, threading
 from paxos_manager import PaxosManager
 from time import sleep
 from transaction_manager import TransactionManager
-from util import safe_print
+from util import safe_print, ConnectGraph
 
 if len(sys.argv) < 3:
 	raise Exception('Wrong arguments. Correct Usage: python server.py <config_file_path> <server_index> <optional_dump_path>')
@@ -13,8 +13,9 @@ else:
 	localConfig = configJson[serverI]
 
 val = serverI
+connectGraph = ConnectGraph(configJson)
 transactionManager = TransactionManager(localConfig['id'])
-paxosManager = PaxosManager(configJson, serverI, transactionManager)
+paxosManager = PaxosManager(configJson, serverI, transactionManager, connectGraph)
 
 currentSaveThreadNum = 0
 saveThreadLock = threading.Lock() # used to prevent data race between currentSaveThread and adding a transaction that can create a saveThread
@@ -63,7 +64,7 @@ t.start()
 
 while True:
 	cmd = raw_input("")
-	if "moneyTransfer" in cmd:
+	if 'moneyTransfer' in cmd:
 		moneyTransferStr, creditNodeStr, costStr = cmd.split(',')
 		transaction = { 'debitNode': localConfig['id'], 'creditNode': int(creditNodeStr), 'cost': int(costStr) }
 		if transaction['creditNode'] < 0 or transaction['creditNode'] >= len(configJson):
@@ -74,19 +75,32 @@ while True:
 			if len(transactionManager.getQueue()) == 1:
 				refreshPaxosSaveThread()
 			saveThreadLock.release()
-	elif cmd == "printBlockchain":
+	elif 'networkDown' in cmd:
+		cmdName, pidStr = cmd.split(',')
+		pid = int(pidStr)
+		if pid == localConfig['id']:
+			raise Error('You cannot take down a network communication between yourself')
+		else:
+			connectGraph.network_down(pid)
+	elif 'networkUp' in cmd:
+		cmdName, pidStr = cmd.split(',')
+		pid = int(pidStr)
+		connectGraph.network_up(pid)
+	elif cmd == 'printBlockchain':
 		blockchain = transactionManager.getBlockchain()
 		safe_print(list(map(lambda block: str(block), blockchain)))
-	elif cmd == "printBalance":
+	elif cmd == 'printBalance':
 		safe_print(transactionManager.getBalance())
-	elif cmd == "printQueue":
+	elif cmd == 'printQueue':
 		safe_print(transactionManager.getQueue())
-	elif cmd == "attemptSave":
+	elif cmd == 'attemptSave':
 		paxosManager.attempt_save()
-	elif cmd == "serverCrash":
+	elif cmd == 'serverCrash':
 		paxosManager.lock.acquire() # take the paxosManager lock and don't release it
 		paxosManager.dumpDisk()
 		safe_print('server crashing')
 		sys.exit()
+	elif cmd == 'printGraph':
+		print connectGraph
 	else:
-		print "Invalid command"
+		print 'Invalid command'
