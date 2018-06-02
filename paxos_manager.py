@@ -29,6 +29,7 @@ class PaxosManager:
 		self.lock.acquire()
 		if len(self.transactionManager.getQueue()) > 0:
 			self.init_election()
+		self.dumpDisk()
 		self.lock.release()
 	def broadcast(self, msg):
 		# does not broadcast to self
@@ -41,6 +42,37 @@ class PaxosManager:
 		prepare_msg = create_prepare_msg(self.pid, self.ballotNum)
 		self.process_prepare_msg(json.loads(prepare_msg))
 		self.broadcast(prepare_msg)
+	def dumpDisk(self):
+		with open("./server-{0}.dump.json".format(self.pid), 'w+') as f:
+			json.dump(self.json(), f)
+	def initializeFromJSON(self, props):
+		self.globalConfig = props['globalConfig']
+		self.depth = props['depth']
+		self.pid = props['pid']
+		self.serverI = props['serverI']
+		self.transactionManager.initializeFromJSON(props['transactionManager'])
+		self.acceptCount = props['acceptCount']
+		self.acks = props['acks']
+		self.ballotNum = props['ballotNum']
+		self.electionInProg = props['electionInProg']
+		self.isLeader = props['isLeader']
+		self.acceptNum = props['acceptNum']
+		self.acceptVal = props['acceptVal']
+	def json(self):
+		props = {}
+		props['globalConfig'] = self.globalConfig
+		props['depth'] = self.depth
+		props['pid'] = self.pid
+		props['serverI'] = self.serverI
+		props['transactionManager'] = self.transactionManager.json()
+		props['acceptCount'] = self.acceptCount
+		props['acks'] = self.acks
+		props['ballotNum'] = self.ballotNum
+		props['electionInProg'] = self.electionInProg
+		props['isLeader'] = self.isLeader
+		props['acceptNum'] = self.acceptNum
+		props['acceptVal'] = self.acceptVal
+		return props
 	def process_recv_msg(self, msg):
 		self.lock.acquire()
 		safe_print("Received message: {0}".format(str(msg)))
@@ -54,6 +86,7 @@ class PaxosManager:
 			self.process_prepare_msg(msg)
 		else:
 			raise Exception('Incorrect msg format' + str(msg))
+		self.dumpDisk()
 		self.lock.release()
 	def process_accept_msg(self, msg):
 		ballotNum = msg['header']['ballotNum']

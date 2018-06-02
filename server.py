@@ -1,7 +1,7 @@
 import io, json, random, socket, sys, threading
 from paxos_manager import PaxosManager
 from time import sleep
-from transactions import TransactionManager
+from transaction_manager import TransactionManager
 from util import safe_print
 
 if len(sys.argv) < 3:
@@ -14,7 +14,7 @@ else:
 
 val = serverI
 transactionManager = TransactionManager(localConfig['id'])
-paxos_m = PaxosManager(configJson, serverI, transactionManager)
+paxosManager = PaxosManager(configJson, serverI, transactionManager)
 
 currentSaveThreadNum = 0
 saveThreadLock = threading.Lock() # used to prevent data race between currentSaveThread and adding a transaction that can create a saveThread
@@ -30,18 +30,32 @@ def initPaxosSaveThread(threadNum):
 		if len(transactionManager.getQueue()) == 0 or currentSaveThreadNum != threadNum:
 			saveThreadLock.release()
 			break
-		paxos_m.attempt_save() # won't save empty blocks
+		paxosManager.attempt_save() # won't save empty blocks
 		backoffMax *= 1.5
 		saveThreadLock.release()
 
+def refreshPaxosSaveThread():
+	global currentSaveThreadNum
+	currentSaveThreadNum += 1
+	t = threading.Thread(target=initPaxosSaveThread, args=(currentSaveThreadNum,))
+	t.daemon = True
+	t.start()
+
+serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+serverSocket.bind((localConfig['ip_addr'], int(localConfig['port'])))
+print "Server {0} listening on port {1}".format(str(localConfig['id']), str(localConfig['port']))
+
+if len(sys.argv) == 4:
+	# load paxosManager from last saved
+	paxosManager.initializeFromJSON(json.load(open(sys.argv[3])))
+	if len(transactionManager.getQueue()) > 0: # if there was a transaction before the crash, start the save attempt thread
+		refreshPaxosSaveThread()
+
 def listenRequests():
-	serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	serverSocket.bind((localConfig['ip_addr'], int(localConfig['port'])))
-	print "Server {0} listening on port {1}".format(str(localConfig['id']), str(localConfig['port']))
 	while True:
 		data, addr = serverSocket.recvfrom(1024)
 		msg = json.loads(data)
-		threading.Thread(target=paxos_m.process_recv_msg, args=(msg,)).start()
+		threading.Thread(target=paxosManager.process_recv_msg, args=(msg,)).start()
 
 t = threading.Thread(target=listenRequests)
 t.daemon = True
@@ -58,10 +72,7 @@ while True:
 			saveThreadLock.acquire()
 			transactionManager.addPendingTransaction(transaction)
 			if len(transactionManager.getQueue()) == 1:
-				currentSaveThreadNum += 1
-				t = threading.Thread(target=initPaxosSaveThread, args=(currentSaveThreadNum,))
-				t.daemon = True
-				t.start()
+				refreshPaxosSaveThread()
 			saveThreadLock.release()
 	elif cmd == "printBlockchain":
 		blockchain = transactionManager.getBlockchain()
@@ -71,6 +82,11 @@ while True:
 	elif cmd == "printQueue":
 		safe_print(transactionManager.getQueue())
 	elif cmd == "attemptSave":
-		paxos_m.attempt_save()
+		paxosManager.attempt_save()
+	elif cmd == "serverCrash":
+		paxosManager.lock.acquire() # take the paxosManager lock and don't release it
+		paxosManager.dumpDisk()
+		safe_print('server crashing')
+		sys.exit()
 	else:
 		print "Invalid command"

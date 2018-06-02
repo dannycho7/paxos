@@ -38,7 +38,7 @@ class TransactionManager:
 				break
 	def deleteTransactions(self, block):
 		for transaction in block:
-			self.deleteTransaction(transaction)	
+			self.deleteTransaction(transaction)
 	def getTransactionsForBlock(self):
 		return self.pendingTransactions
 	def getBalance(self):
@@ -47,3 +47,17 @@ class TransactionManager:
 		return self.blockchain
 	def getQueue(self):
 		return self.pendingTransactions
+	def initializeFromJSON(self, props):
+		self.balance = props['balance']
+		self.blockchain = props['blockchain']
+		self.pendingTransactions = props['pendingTransactions']
+		self.pendingTransactionsCost = props['pendingTransactionsCost']
+		self.pid = props['pid']
+	def json(self):
+		props = {}
+		props['balance'] = self.balance
+		props['blockchain'] = self.blockchain
+		props['pendingTransactions'] = self.pendingTransactions
+		props['pendingTransactionsCost'] = self.pendingTransactionsCost
+		props['pid'] = self.pid
+		return props
