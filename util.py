@@ -2,16 +2,22 @@ import threading, random, socket
 from time import sleep
 
 class DelayedSocket:
-	def __init__(self):
+	def __init__(self, globalConfig):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	def sendto(self, msg, destTuple):
-		t = threading.Thread(target=self.delayed_send, args=(msg, destTuple,))
+		self.globalConfig = globalConfig
+		self.connectGraph = {}
+		for conf in self.globalConfig:
+			self.connectGraph[conf['id']] = True
+	def delayed_send(self, msg, destTuple, pid):
+		t = threading.Thread(target=self.sendto, args=(msg, destTuple, pid,))
 		t.daemon = True
 		t.start()
-	def delayed_send(self, msg, destTuple):
+	def sendto(self, msg, destTuple, pid):
 		sleep(random.uniform(1.8,2))
-		self.sock.sendto(msg, destTuple)
-
+		if self.connectGraph[pid] == True:
+			self.sock.sendto(msg, destTuple)
+		else:
+			safe_print('Unable to reach node {0}'.format(pid))
 class SafePrint:
 	def __init__(self):
 		self.lock = threading.Lock()

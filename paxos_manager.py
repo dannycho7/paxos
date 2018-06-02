@@ -33,8 +33,8 @@ class PaxosManager:
 		self.lock.release()
 	def broadcast(self, msg):
 		# does not broadcast to self
-		for broadcastAddr in self.globalConfig[0:self.serverI] + self.globalConfig[self.serverI + 1:]:
-			self.sock.sendto(msg, (broadcastAddr['ip_addr'], broadcastAddr['port']))
+		for config in self.globalConfig[0:self.serverI] + self.globalConfig[self.serverI + 1:]:
+			self.sock.delayed_send(msg, (config['ip_addr'], config['port']), config['id'])
 	def init_election(self):
 		self.reset_activity()
 		self.ballotNum = { 'num': self.ballotNum['num'] + 1, 'pid': self.pid ,'depth': self.depth}
@@ -86,7 +86,7 @@ class PaxosManager:
 			# send blockchain request to the node you received a msg from since you'd be out-of-date
 			msg_pid = msg['header']['pid']
 			block_update_req_msg = create_block_update_req_msg(self.pid, self.ballotNum)
-			self.sock.sendto(block_update_req_msg, (self.globalConfig[msg_pid]['ip_addr'], self.globalConfig[msg_pid]['port']))
+			self.sock.delayed_send(block_update_req_msg, (self.globalConfig[msg_pid]['ip_addr'], self.globalConfig[msg_pid]['port']), msg_pid)
 		elif msg['header']['type'] == 'accept':
 			self.process_accept_msg(msg)
 		elif msg['header']['type'] == 'ack':
@@ -114,7 +114,7 @@ class PaxosManager:
 			self.acceptNum = ballotNum
 			self.acceptVal = msg['body']
 			accept_msg = create_accept_msg(self.pid, self.ballotNum, self.acceptVal)
-			self.sock.sendto(accept_msg, (self.globalConfig[msg_pid]['ip_addr'], self.globalConfig[msg_pid]['port']))
+			self.sock.delayed_send(accept_msg, (self.globalConfig[msg_pid]['ip_addr'], self.globalConfig[msg_pid]['port']), msg_pid)
 	def process_ack_msg(self, msg):
 		if self.isLeader or not self.electionInProg:
 			return # if you already won the election or there is no election in progress, then ignore this ack msg
@@ -130,7 +130,7 @@ class PaxosManager:
 	def process_create_block_update_req_msg(self, msg):
 		msg_pid = msg['header']['pid']
 		block_update_res_msg = create_block_update_res_msg(self.pid, self.ballotNum, self.transactionManager.getBlockchain())
-		self.sock.sendto(block_update_res_msg, (self.globalConfig[msg_pid]['ip_addr'], self.globalConfig[msg_pid]['port']))
+		self.sock.delayed_send(block_update_res_msg, (self.globalConfig[msg_pid]['ip_addr'], self.globalConfig[msg_pid]['port']), msg_pid)
 	def process_create_block_update_res_msg(self, msg):
 		msg_blockchain = msg['body']
 		for i in range(self.depth, len(msg_blockchain)):
@@ -149,7 +149,7 @@ class PaxosManager:
 				self.electionInProg = False # cancel election since you've ack'd a ballotNum higher than yourself
 			self.ballotNum = ballotNum
 			ack_msg = create_ack_msg(self.pid, self.ballotNum, self.acceptNum, self.acceptVal)
-			self.sock.sendto(ack_msg, (self.globalConfig[msg_pid]['ip_addr'], self.globalConfig[msg_pid]['port']))
+			self.sock.delayed_send(ack_msg, (self.globalConfig[msg_pid]['ip_addr'], self.globalConfig[msg_pid]['port']), msg_pid)
 	def __get_accept_val_from_acks(self):
 		# You don't have to check for depth, because it is checked on the process_prepare_msg. A node would NOT send an ACK if the depth is different from the prepared ballotNum. acceptVal/Num should be refreshed on every depth update.
 		maxAcceptVal = self.transactionManager.getTransactionsForBlock()
