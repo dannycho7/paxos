@@ -5,6 +5,10 @@ class DelayedSocket:
 	def __init__(self):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	def sendto(self, msg, destTuple):
+		t = threading.Thread(target=self.delayed_send, args=(msg, destTuple,))
+		t.daemon = True
+		t.start()
+	def delayed_send(self, msg, destTuple):
 		sleep(random.uniform(1.8,2))
 		self.sock.sendto(msg, destTuple)
 
