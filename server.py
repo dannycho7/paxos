@@ -10,6 +10,7 @@ else:
 	configJson = json.load(file)
 	serverI = int(sys.argv[2]) % len(configJson)
 	localConfig = configJson[serverI]
+	serverIdList = map(lambda x: x['id'], configJson)
 
 val = serverI
 connectGraph = ConnectGraph(configJson)
@@ -39,23 +40,27 @@ t.start()
 while True:
 	cmd = raw_input("")
 	if 'moneyTransfer' in cmd:
-		moneyTransferStr, creditNodeStr, costStr = cmd.split(',')
-		transaction = { 'debitNode': localConfig['id'], 'creditNode': int(creditNodeStr), 'cost': int(costStr) }
-		if transaction['creditNode'] < 0 or transaction['creditNode'] >= len(configJson):
-			raise Exception('Invalid creditNode')
+		moneyTransferStr, creditNode, costStr = cmd.split(',')
+		transaction = { 'debitNode': localConfig['id'], 'creditNode': creditNode, 'cost': int(costStr) }
+		if transaction['creditNode'] not in serverIdList:
+			safe_print('Invalid creditNode')
 		else:
-			paxosManager.add_transaction(transaction)
+			try:
+				paxosManager.add_transaction(transaction)
+			except Exception as e:
+				safe_print(e)
 	elif 'networkDown' in cmd:
-		cmdName, pidStr = cmd.split(',')
-		pid = int(pidStr)
+		cmdName, pid = cmd.split(',')
 		if pid == localConfig['id']:
-			raise Error('You cannot take down a network communication between yourself')
+			safe_print('You cannot take down a network communication between yourself')
 		else:
 			connectGraph.network_down(pid)
 	elif 'networkUp' in cmd:
-		cmdName, pidStr = cmd.split(',')
-		pid = int(pidStr)
-		connectGraph.network_up(pid)
+		cmdName, pid = cmd.split(',')
+		if pid == localConfig['id']:
+			safe_print('You cannot take down a network communication between yourself')
+		else:
+			connectGraph.network_up(pid)
 	elif cmd == 'printBlockchain':
 		blockchain = transactionManager.getBlockchain()
 		safe_print(list(map(lambda block: str(block), blockchain)))
