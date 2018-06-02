@@ -1,7 +1,7 @@
-import json, socket, threading
+import json, threading
 from math import ceil
 from message_templates import create_accept_msg, create_ack_msg, create_decision_msg, create_prepare_msg
-from util import safe_print
+from util import DelayedSocket, safe_print
 
 class PaxosManager:
 	def __init__(self, globalConfig, serverI, transactionManager):
@@ -10,7 +10,7 @@ class PaxosManager:
 		self.lock = threading.Lock() # reduces complexity by only processing one message at a time/preventing a collision from starting an election and processing a msg at the same time.
 		self.pid = globalConfig[serverI]['id']
 		self.serverI = serverI
-		self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # share one socket on PaxosManager since every method is thread-safe
+		self.sock = DelayedSocket() # share one socket on PaxosManager since every method is thread-safe
 		self.transactionManager = transactionManager
 		self.hard_reset_activity()	
 	def reset_activity(self):
