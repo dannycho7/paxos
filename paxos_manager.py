@@ -1,12 +1,15 @@
-import json, threading
+import json, random, threading
 from math import ceil
 from message_templates import create_accept_msg, create_ack_msg, create_block_update_req_msg, create_block_update_res_msg, create_decision_msg, create_prepare_msg
+from time import sleep
 from util import DelayedSocket, safe_print
 
 class PaxosManager:
 	def __init__(self, globalConfig, serverI, transactionManager, connectGraph):
 		self.globalConfig = globalConfig
+		self.currentSaveThreadNum = 0
 		self.depth = len(transactionManager.getBlockchain())
+		self.saveThreadLock = threading.Lock() # data race between incrementing self.currentSaveThreadNum and the check for it in the thread. (not critical but can be annoying).
 		self.lock = threading.Lock() # reduces complexity by only processing one message at a time/preventing a collision from starting an election and processing a msg at the same time.
 		self.pid = globalConfig[serverI]['id']
 		self.serverI = serverI
@@ -17,20 +20,49 @@ class PaxosManager:
 		# simply an assignment method that should be called when wanting to reset the variables that are used to determine progress in paxos. used when starting a new election
 		self.acceptCount = 0
 		self.acks = [] # should contain items of: { 'acceptNum': <int>, 'acceptVal': <list> }
-		self.ballotNum = { 'num': 0, 'depth': 0, 'pid': 0 }
 		self.electionInProg = False
 		self.isLeader = False
 	def hard_reset_activity(self):
 		# also sets acceptVal and acceptNum to init values. used when deciding on a value in process_accept_msg or when creating new paxos instance
 		self.reset_activity()
+		self.ballotNum = { 'num': 0, 'depth': 0, 'pid': 0 }
 		self.acceptNum = { 'num': 0, 'depth': 0, 'pid': 0 }
 		self.acceptVal = None	
+	def add_transaction(self, transaction):
+		self.lock.acquire()
+		self.transactionManager.addPendingTransaction(transaction)
+		if len(self.transactionManager.getQueue()) == 1:
+			self.attempt_save_timeout_refresh()
+		self.lock.release()
 	def attempt_save(self):
 		self.lock.acquire()
 		if len(self.transactionManager.getQueue()) > 0:
 			self.init_election()
 		self.dumpDisk()
+		self.attempt_save_timeout_refresh()
 		self.lock.release()
+	def attempt_save_timeout_refresh(self):
+		self.kill_current_save_timeout()
+		if len(self.transactionManager.getQueue()) == 0:
+			return
+		t = threading.Thread(target=self.attempt_save_timeout_thread, args=(self.currentSaveThreadNum,))
+		t.daemon = True
+		t.start()
+	def attempt_save_timeout_thread(self, threadNum):
+		# initiate leader election within (12, 20] seconds of receiving a moneyTransfer
+		timeout = random.uniform(12, 20)
+		sleep(timeout)
+		self.saveThreadLock.acquire()
+		if self.currentSaveThreadNum != threadNum:
+			self.saveThreadLock.release()
+			return
+		self.saveThreadLock.release()
+		safe_print('Starting save attempt after {0} seconds....'.format(timeout))
+		self.attempt_save() # won't save empty blocks
+	def kill_current_save_timeout(self):
+		self.saveThreadLock.acquire()
+		self.currentSaveThreadNum += 1 # kill the current save thread loop
+		self.saveThreadLock.release()
 	def broadcast(self, msg):
 		# does not broadcast to self
 		for config in self.globalConfig[0:self.serverI] + self.globalConfig[self.serverI + 1:]:
@@ -109,6 +141,7 @@ class PaxosManager:
 			self.acceptVal = msg['body']
 			self.acceptCount += 1
 			if self.acceptCount > (len(self.globalConfig) / 2): # receive accept from majority
+				self.kill_current_save_timeout()
 				decision_msg = create_decision_msg(self.pid, self.ballotNum, self.acceptVal)
 				self.process_decision_msg(json.loads(decision_msg))
 				self.broadcast(decision_msg)
@@ -152,6 +185,7 @@ class PaxosManager:
 			self.ballotNum = ballotNum
 			ack_msg = create_ack_msg(self.pid, self.ballotNum, self.acceptNum, self.acceptVal)
 			self.sock.delayed_send(ack_msg, (self.globalConfig[msg_pid]['ip_addr'], self.globalConfig[msg_pid]['port']), msg_pid)
+			self.attempt_save_timeout_refresh()
 	def __get_accept_val_from_acks(self):
 		# You don't have to check for depth, because it is checked on the process_prepare_msg. A node would NOT send an ACK if the depth is different from the prepared ballotNum. acceptVal/Num should be refreshed on every depth update.
 		maxAcceptVal = self.transactionManager.getTransactionsForBlock()
