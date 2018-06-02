@@ -1,3 +1,4 @@
+#!/usr/bin/python2
 import io, json, socket, sys, threading
 from paxos_manager import PaxosManager
 from transaction_manager import TransactionManager

@@ -1,3 +1,4 @@
+#!/usr/bin/python2
 import threading
 from util import safe_print
 

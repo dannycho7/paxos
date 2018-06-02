@@ -1,3 +1,4 @@
+#!/usr/bin/python2
 import json, random, threading
 from math import ceil
 from message_templates import create_accept_msg, create_ack_msg, create_block_update_req_msg, create_block_update_res_msg, create_decision_msg, create_prepare_msg

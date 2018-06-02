@@ -1,3 +1,4 @@
+#!/usr/bin/python2
 import json
 
 def create_msg(msg_type, pid, ballotNum, body = []):
