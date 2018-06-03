@@ -183,9 +183,11 @@ class PaxosManager:
 		self.sock.delayed_send(block_update_res_msg, (sendToConfig['ip_addr'], sendToConfig['port']), msg_pid)
 	def process_block_update_res_msg(self, msg):
 		msg_blockchain = msg['body']
-		for i in range(self.depth, len(msg_blockchain)):
-			self.transactionManager.addBlock(msg_blockchain[i])
-		self.depth = len(self.transactionManager.getBlockchain())
+		if len(msg_blockchain) > self.depth:
+			for i in range(self.depth, len(msg_blockchain)):
+				self.transactionManager.addBlock(msg_blockchain[i])
+			self.depth = len(self.transactionManager.getBlockchain())
+			self.hard_reset_activity()
 	def process_decision_msg(self, msg):
 		ballotNum = msg['header']['ballotNum']
 		self.transactionManager.addBlock(msg['body'])
