@@ -123,11 +123,12 @@ class PaxosManager:
 		elif msg_type == 'blockUpdateRes':
 			self.process_block_update_res_msg(msg)
 		elif msg_ballotNum['depth'] < self.depth:
-			# this means that an outdated node sent you a message
-			# forge a blockUpdateReq message from that node so that you can process it locally and send back a blockUpdateRes
-			sendToConfig = self.globalConfig[self.__get_server_index_from_pid(self.pid)] # send to yourself
-			block_update_req_msg = create_block_update_req_msg(msg_pid, msg_ballotNum) # forge message as if it was created by the node
-			self.sock.delayed_send(block_update_req_msg, (sendToConfig['ip_addr'], sendToConfig['port']), msg_pid)
+			# this means that an outdated node sent you a message; you don't want to respond to it normally
+			# forge a blockUpdateReq message from that node so that you can process it locally and send back a blockUpdateRes if it was an outdated prepare msg
+			if msg_type == 'prepare':
+				sendToConfig = self.globalConfig[self.__get_server_index_from_pid(self.pid)] # send to yourself
+				block_update_req_msg = create_block_update_req_msg(msg_pid, msg_ballotNum) # forge message as if it was created by the node
+				self.sock.delayed_send(block_update_req_msg, (sendToConfig['ip_addr'], sendToConfig['port']), msg_pid)
 		elif msg_ballotNum['depth'] > self.depth:
 			# send blockchain request to the node you received a msg from since you'd be out-of-date
 			sendToConfig = self.globalConfig[self.__get_server_index_from_pid(msg_pid)]
