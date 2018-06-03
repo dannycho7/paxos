@@ -80,7 +80,7 @@ class PaxosManager:
 		self.process_prepare_msg(json.loads(prepare_msg))
 		self.broadcast(prepare_msg)
 	def dumpDisk(self):
-		with open("./server-{0}.dump.json".format(self.pid), 'w+') as f:
+		with open("./dump/server-{0}.json".format(self.pid), 'w+') as f:
 			json.dump(self.json(), f)
 	def initializeFromJSON(self, props):
 		self.globalConfig = props['globalConfig']
