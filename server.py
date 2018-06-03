@@ -19,7 +19,7 @@ transactionManager = TransactionManager(localConfig['id'])
 paxosManager = PaxosManager(configJson, serverI, transactionManager, connectGraph)
 
 serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-serverSocket.bind((localConfig['ip_addr'], int(localConfig['port'])))
+serverSocket.bind((localConfig['local_ip_addr'], int(localConfig['port'])))
 print "Server {0} listening on port {1}".format(str(localConfig['id']), str(localConfig['port']))
 
 if len(sys.argv) == 4:
