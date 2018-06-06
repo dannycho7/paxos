@@ -35,7 +35,7 @@ class DelayedSocket:
 	def json(self):
 		return { 'connectGraph': self.connectGraph.json() }
 	def sendto(self, msg, destTuple, pid):
-		sleep(random.uniform(1.8,2))
+		sleep(random.uniform(1, 1.5))
 		if self.connectGraph.getStatus(pid) == True:
 			self.sock.sendto(msg, destTuple)
 		else:

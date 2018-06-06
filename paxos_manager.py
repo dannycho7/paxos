@@ -54,8 +54,8 @@ class PaxosManager:
 		t.daemon = True
 		t.start()
 	def attempt_save_timeout_thread(self, threadNum):
-		# initiate leader election within (12, 20] seconds of receiving a moneyTransfer
-		timeout = random.uniform(12, 20)
+		# initiate leader election within [10, 15) seconds of receiving a moneyTransfer
+		timeout = random.uniform(10, 15)
 		sleep(timeout)
 		self.saveThreadLock.acquire()
 		if self.currentSaveThreadNum != threadNum:
