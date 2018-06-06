@@ -79,7 +79,11 @@ while True:
 		blockStr = []
 		for transaction in block:
 			blockStr.append(transactionManager.getTransactionStr(transaction))
-		safe_print("Queued Transactions: {0}".format('; '.join(blockStr)))
+		if len(blockStr) == 0:
+			blockStrRepr = "None"
+		else:
+			blockStrRepr = '; '.join(blockStr)
+		safe_print("Queued Transactions: {0}".format(blockStrRepr))
 	elif cmd == 'attemptSave':
 		paxosManager.attempt_save()
 	elif cmd == 'serverCrash':
