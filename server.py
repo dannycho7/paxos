@@ -64,11 +64,22 @@ while True:
 			connectGraph.network_up(pid)
 	elif cmd == 'printBlockchain':
 		blockchain = transactionManager.getBlockchain()
-		safe_print(list(map(lambda block: str(block), blockchain)))
+		blockchainStr = []
+		for i in range(0, len(blockchain)):
+			block = blockchain[i]
+			blockStr = []
+			for transaction in block:
+				blockStr.append(transactionManager.getTransactionStr(transaction))
+			blockchainStr.append("Block {0}: {1}".format(i, '; '.join(blockStr)))
+		safe_print('\n'.join(blockchainStr))
 	elif cmd == 'printBalance':
 		safe_print(transactionManager.getBalance())
 	elif cmd == 'printQueue':
-		safe_print(transactionManager.getQueue())
+		block = transactionManager.getQueue()
+		blockStr = []
+		for transaction in block:
+			blockStr.append(transactionManager.getTransactionStr(transaction))
+		safe_print("Queued Transactions: {0}".format('; '.join(blockStr)))
 	elif cmd == 'attemptSave':
 		paxosManager.attempt_save()
 	elif cmd == 'serverCrash':

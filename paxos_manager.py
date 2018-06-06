@@ -114,10 +114,10 @@ class PaxosManager:
 		return props
 	def process_recv_msg(self, msg):
 		self.lock.acquire()
-		safe_print("Received message: {0}".format(str(msg)))
 		msg_pid = msg['header']['pid']
 		msg_type = msg['header']['type']
 		msg_ballotNum = msg['header']['ballotNum']
+		safe_print("Received {0} message from node {1} with ballotNum <{2}, {3}, {4}>".format(msg_type, msg_pid, msg_ballotNum['num'], msg_ballotNum['pid'], msg_ballotNum['depth']))
 		if msg_type == 'blockUpdateReq':
 			self.process_block_update_req_msg(msg)
 		elif msg_type == 'blockUpdateRes':

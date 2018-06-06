@@ -50,6 +50,8 @@ class TransactionManager:
 		return self.blockchain
 	def getQueue(self):
 		return self.pendingTransactions
+	def getTransactionStr(self, transaction):
+		return "({0} -> {1} {2})".format(transaction['debitNode'], transaction['creditNode'], transaction['cost'])
 	def initializeFromJSON(self, props):
 		self.balance = props['balance']
 		self.blockchain = props['blockchain']
